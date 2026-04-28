@@ -2,14 +2,14 @@
 // deno --watch-hmr --allow-all main.ts
 import MultiGraph from "https://esm.sh/graphology";
 import {ToGraph} from "./reduce.ts"
-import SParser from "./sexpr.js";
+import {Parser} from "./parser.ts";
 import * as O from "./objs.ts";
 
 let code = `
 (
   (node Qsort
     -ret
-    >in
+    > in
   )
   (node Cons
     -ret
@@ -51,7 +51,7 @@ function show_nested(val: any, depth = 0): string {
   return `[${args_str}]`;
 }
 
-let nested = SParser(code); 
+let nested = new Parser(code).get_sexpr(); 
 
 // let structured = nested.flatMap((el: any) => {
 //   const type = el.shift(0);
