@@ -155,28 +155,18 @@ function apply_rewrite(
   for (const left_edge of graph.graph.edges(nodes[0])) {
     if (left_edge !== active_pair) {
       const outgoing_attrs = graph.graph.getEdgeAttributes(left_edge);
-      if (
-        left_edge.split("<>")[0].split("___")[1] ===
-        `${rule.inputs[0].clss}$${rule.inputs[0].name}.${rule.inputs[0].port}`
-      ) {
-        external_nodes.set(
-          `${rule.inputs[0].clss}$${rule.inputs[0].name}.${outgoing_attrs.left_port}`,
-          left_edge.split("<>")[1].split(".")[0],
-        );
-      } else {
-        external_nodes.set(
-          `${rule.inputs[0].clss}$${rule.inputs[0].name}.${outgoing_attrs.left_port}`,
-          left_edge.split(".")[0],
-        );
-      }
+      external_nodes.set(
+        `${rule.inputs[1].clss}$${rule.inputs[0].name}.${outgoing_attrs.right_port}`,
+        graph.graph.opposite(nodes[0], left_edge),
+      );
     }
   }
   for (const right_edge of graph.graph.edges(nodes[1])) {
     if (right_edge !== active_pair) {
       const outgoing_attrs = graph.graph.getEdgeAttributes(right_edge);
       external_nodes.set(
-        `${rule.inputs[1].clss}$${rule.inputs[1].name}.${outgoing_attrs.left_port}`,
-        right_edge.split(".")[0],
+        `${rule.inputs[0].clss}$${rule.inputs[1].name}.${outgoing_attrs.right_port}`,
+        graph.graph.opposite(nodes[1], right_edge),
       );
     }
   }
@@ -293,10 +283,10 @@ function reduce(
     const right_node_attributes = graph.graph.getNodeAttributes(right_id);
     const rule_to_apply = rules.find((el) => {
       return (
-        left_node_attributes.clss === el.inputs[flip ? 0 : 1].clss && // Don't ask me why these need to be flipped
-        edge_attributes.left_port === el.inputs[flip ? 0 : 1].port &&
-        right_node_attributes.clss === el.inputs[flip ? 1 : 0].clss &&
-        edge_attributes.right_port === el.inputs[flip ? 1 : 0].port
+        left_node_attributes.clss === el.inputs[flip ? 1 : 1].clss && // Don't ask me why these need to be flipped
+        edge_attributes.left_port === el.inputs[flip ? 1 : 1].port &&
+        right_node_attributes.clss === el.inputs[flip ? 0 : 0].clss &&
+        edge_attributes.right_port === el.inputs[flip ? 0 : 0].port
       );
     });
     console.log(rule_to_apply);

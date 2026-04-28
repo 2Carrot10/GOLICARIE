@@ -13,7 +13,7 @@
             (Sub
               >targ)))
   (rules (
-          ((App$in1.lam Lam$in1.abs)
+          ((Lam$in1.abs App$in1.lam)
            (App$in1.arg Lam$in1.bnd
             App$in1.ret Lam$in1.bod))))
   (graph
