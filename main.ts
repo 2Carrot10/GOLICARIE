@@ -51,7 +51,7 @@ function show_nested(val: any, depth = 0): string {
   return `[${args_str}]`;
 }
 
-let nested = new Parser(code).get_sexpr(); 
+let nested = new Parser(code).parse(); 
 
 // let structured = nested.flatMap((el: any) => {
 //   const type = el.shift(0);

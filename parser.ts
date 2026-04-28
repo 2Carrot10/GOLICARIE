@@ -17,7 +17,7 @@ export class Parser {
 	peek_char() {
 		let next_char = this.text[this.i]
 
-		if(next_char == null) {
+		if (next_char == null) {
 			throw new Error("Could not find next char")
 		} else {
 			return next_char
@@ -32,10 +32,10 @@ export class Parser {
 
 
 	next_token(): string {
-		while(white_space.includes(this.peek_char())) {
+		while (white_space.includes(this.peek_char())) {
 			this.next_char()
-			if(this.peek_char() == ";") {
-				while(this.peek_char() != "\n") {
+			if (this.peek_char() == ";") {
+				while (this.peek_char() != "\n") {
 					this.next_char()
 				}
 			}
@@ -45,15 +45,25 @@ export class Parser {
 		let next = this.next_char()
 		if (next == "(" || next == ")") {
 		} else if (special_characters.includes(next)) {
-			while(special_characters.includes(this.peek_char())) {
+			while (special_characters.includes(this.peek_char())) {
 				this.next_char()
 			}
 		} else if (alphanumerics.includes(next)) {
-			while(alphanumerics.includes(this.peek_char())) {
+			while (alphanumerics.includes(this.peek_char())) {
 				this.next_char()
 			}
 		}
 		return this.text.slice(start_index, this.i)
+	}
+
+	parse(): SExpr {
+		let sexpr = this.get_sexpr()
+		// We want the final token request to fail
+		try { this.next_token() } catch (error) {
+			return sexpr
+		}
+		throw new Error(`Text found at the end of final ')': '${this.text.slice(this.i - 10, this.i + 100)}'`)
+
 	}
 
 	get_sexpr(): SExpr {
@@ -63,8 +73,8 @@ export class Parser {
 		}
 		let contains: SExpr[] = []
 		let token: string
-		while((token = this.next_token()) != ")") {
-			if(token == "(") {
+		while ((token = this.next_token()) != ")") {
+			if (token == "(") {
 				this.i--; // HACK!
 				contains.push(this.get_sexpr())
 			} else {
