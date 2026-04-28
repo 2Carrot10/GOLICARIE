@@ -1,9 +1,7 @@
 type SExpr = string | SExpr[]
 
 // const token_re = /(?x) \d+| \n| [[[:alpha:]]\_]+ | '.+?'|".*"+?|[=+*/%&|<>!?^~\#\-]+   | [\(\)\[\]\{\}.\:;,@]| \p/
-const white_space = ["\n", " ", "\n"]
-const alphanumerics = "abcdefghijklmnopqrstuvwxyzABCDEFGHJKLMNOPQRSTUVWXYZ".split("")
-const special_characters = "-<>!=".split("")
+const white_space = ["\n", " ", "\t"]
 
 export class Parser {
 	text: string
@@ -32,28 +30,34 @@ export class Parser {
 
 
 	next_token(): string {
-		while (white_space.includes(this.peek_char())) {
-			this.next_char()
+		while (true) {
+			while (white_space.includes(this.peek_char())) {
+				this.next_char()
+			}
 			if (this.peek_char() == ";") {
-				while (this.peek_char() != "\n") {
+				while (this.peek_char() != "\n" && this.peek_char() != null) {
 					this.next_char()
 				}
+			} else {
+				break
 			}
 		}
 
-		var start_index = this.i;
-		let next = this.next_char()
-		if (next == "(" || next == ")") {
-		} else if (special_characters.includes(next)) {
-			while (special_characters.includes(this.peek_char())) {
-				this.next_char()
-			}
-		} else if (alphanumerics.includes(next)) {
-			while (alphanumerics.includes(this.peek_char())) {
-				this.next_char()
-			}
+		if (this.i >= this.text.length) {
+			throw new Error("Unexpected end of input")
 		}
-		return this.text.slice(start_index, this.i)
+
+		let next = this.peek_char()
+		if (next == "(" || next == ")") {
+			this.next_char()
+			return next
+		} else {
+			let start = this.i
+			while (this.i < this.text.length && !white_space.includes(this.text[this.i]) && this.text[this.i] != "(" && this.text[this.i] != ")" && this.text[this.i] != ";") {
+				this.i++
+			}
+			return this.text.slice(start, this.i)
+		}
 	}
 
 	parse(): SExpr {

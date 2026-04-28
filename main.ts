@@ -1,93 +1,81 @@
 // @ts-nocheck
 // deno --watch-hmr --allow-all main.ts
 import MultiGraph from "https://esm.sh/graphology";
-import {ToGraph} from "./reduce.ts"
 import {Parser} from "./parser.ts";
-import * as O from "./objs.ts";
 
-let code = `
-(
-  (node Qsort
-    -ret
-    > in
-  )
-  (node Cons
-    -ret
-    -x
-    >xs
-  )
-  (node F
-    -a
-    >b)
-  (conn F$1.a F$2.a)
-  (conn F$1.b F$2.b)
-)
-`
-
-
-// Remade the python thing I wrote for showing nested arrays
-const THRESHOLD = 30;
-function show_nested(val: any, depth = 0): string {
-  // Non arrays are leaf nodes
-  if (!Array.isArray(val)) {
-    return JSON.stringify(val);
-  }
-
-  // Recursive call for children
-  const sub_args = val.map((item) => show_nested(item, depth + 1));
-  
-  // Calculate potential single-line length
-  // [item1, item2] -> adds roughly 2 brackets + (commas * count)
-  const totalLength = sub_args.reduce((acc, s) => acc + s.length, 0) + (sub_args.length * 2);
-
-  if (totalLength <= THRESHOLD) {
-    return `[${sub_args.join(", ")}]`;
-  }
-
-  // For multi-lines
-  const indentation = "  ".repeat(depth + 1);
-  const args_str = sub_args.join(`,\n${indentation}`);
-
-  return `[${args_str}]`;
+// Parse args
+let args = Deno.args;
+if (args.length == 0) {
+  console.error("Usage: deno run --allow-read main.ts <file.lisp>");
+  Deno.exit(1);
 }
+
+let code = Deno.readTextFileSync(args[0]);
 
 let nested = new Parser(code).parse(); 
 
-// let structured = nested.flatMap((el: any) => {
-//   const type = el.shift(0);
-//   if (type == "node") {
-// 	  return [new Node(el)]
-//   } else if (type == "=>") { 
-// 	  return [new Match(el)]
-//   } else { 
-// 	  return [];
-//   }
-// })
+function parse_wire(e) {
+  const [x, port] = e.split(".");
+  const [clss, name = "default"] = x.split("$");
+  return {clss, name, port}
+}
 
+const Constructors = {
+  // Would've called this agents b/c that is what it is called on wikipedia, but that now has the connation of LLMs which makes me want to kms.
+  spiders: class {
+    name: string;
+    ports: string[];
+    constructor(name: string, ...ports: string[]) {
+      this.name = name;
+      this.ports = ports;
+    }
+  },
+  rules: class {
+    inputs: string[];
+    outputs: string[];
+    constructor(inputs: string[], outputs: string[]) {
+      this.inputs = inputs.map(parse_wire);
+      this.outputs = outputs.map(parse_wire);
+    }
+  },
+  // We are largely just using graphology for this. So all we do here is convert from the instructions into functions that graphology can understand.
+  graph: class {
+    graph: MultiGraph;
+    constructor(args: string[]) {
+      this.graph = new MultiGraph({type: "mixed"});
 
-// let nodes = [];
-let info = new Map([
-  ["nodes", []],
-  ["conn", []],
-  ["rewrites", []]
-])
-console.log("nested:", nested)
-nested.forEach((el: any) => {
-  const type = el.shift(0);
-  if (type == "node") {
-    info.get("nodes").push(new O.Node(el))
-  } else if (type == "conn") {
-	info.get("conn").push(new O.Conn(el));
-  } else if (type == "=>") {
-    info.get("rewrites").push(new O.Rewrite(el));
+      let x = args.map(parse_wire);
+      console.log(x);
+      let prev_id = null;
+      let prev_port = null;
+      // Now we can add each edge to the graphology graph. We can ignore the fact that we are adding nodes that already exist, as graphology will just ignore that.
+      // The way I'm doing it is a little gross, but to prevent having to explicitly declare variables, we just kinda make nodes when we see that wires refer to them
+      for (let [i, {clss, name, port}] of x.entries()) {
+        const id = `${crypto.randomUUID().slice(0, 8)}___${clss}$${name}`;
+        if (i % 2 == 0) {
+          prev_id = id;
+          prev_port = port;
+          this.graph.addNode(id, {clss, name, port});
+        } else {
+          this.graph.addNode(id, {clss, name, port});
+          // We add `addDirectedEdgeWithKey` based on the agent.
+          this.graph.addUndirectedEdgeWithKey(`${id}_${port}<>${prev_id}_${prev_port}`, prev_id, id);
+        }
+      }
+      
+      // Comes in pairs, so we chunk as such
+      let edges = [];
+      for (let i = 0; i < x.length; i += 2) {
+        edges.push([x[i], x[i + 1]]);
+      }
+
+    }
   }
-})
-console.log(info)
-ToGraph(info.get("nodes"), info.get("conn"))
+}
+// Realized that the API of the nesting actually matched quite well to how `new Map(xss)` works
 
-//console.log(info.get("conn").at(0).constructor.name);
-
-
-// let [_, agent_type, ] = 
-
-// console.log(show_nested(nested));
+const prog = new Map(nested);
+const spiders = prog.get("spiders").map((e) => new Constructors.spiders(...e));
+const rules = prog.get("rules").map((e) => new Constructors.rules(...e));
+const graph = new Constructors.graph(prog.get("graph"));
+console.log(graph);
