@@ -184,12 +184,18 @@ function apply_rewrite(
       prev_port = port;
     } else {
       // We add `addDirectedEdgeWithKey` based on the agent.
+      var id_to_use = id;
+      if (external_nodes.has(`${local}.${port}`)) {
+        // Introduces constraint that when connecting to external nodes, they must be the first argument TODO: fix
+        id_to_use = external_nodes.get(`${local}.${port}`);
+      }
+
       graph.graph.addUndirectedEdgeWithKey(
-        `${id}.${port}<>${prev_id}.${prev_port}`,
+        `${id_to_use}.${port}<>${prev_id}.${prev_port}`,
         prev_id, // Goes between the global ids of the nodes
-        id,
+        id_to_use,
         {
-          left_id: id,
+          left_id: id_to_use,
           right_id: prev_id,
           left_port: port,
           right_port: prev_port,
