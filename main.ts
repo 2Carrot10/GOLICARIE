@@ -160,13 +160,13 @@ function apply_rewrite(
       `${crypto.randomUUID().slice(0, 8)}___${el}`,
     ]),
   );
-  console.log(rule);
-  console.log(glmap);
   vars.forEach((el) => {
+    // if (!rule.inputs.map((rule) => `${rule.clss}$${rule.name}`).includes(el)) {
     graph.graph.addNode(glmap.get(el), {
       clss: el.split("$")[0],
       name: el.split("$")[1],
     });
+    // }
   });
 
   let prev_id = null;
