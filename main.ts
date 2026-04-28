@@ -20,6 +20,24 @@ function parse_wire(e) {
   return { clss, name, port };
 }
 
+function snapshot(g: MultiGraph) {
+  const nodes = [];
+  const edges = [];
+  g.forEachNode((id, attrs) =>
+    nodes.push({ id, clss: attrs.clss, name: attrs.name }),
+  );
+  g.forEachEdge((id, attrs, source, target) =>
+    edges.push({
+      id,
+      source,
+      target,
+      left_port: attrs.left_port,
+      right_port: attrs.right_port,
+    }),
+  );
+  return { nodes, edges };
+}
+
 const Constructors = {
   // Would've called this agents b/c that is what it is called on wikipedia, but that now has the connation of LLMs which makes me want to kms.
   spiders: class {
@@ -130,15 +148,27 @@ function apply_rewrite(
   rule: rules,
   nodes: string[],
   active_pair: string,
+  spider_defs: spiders[],
 ) {
   var external_nodes = new Map();
+  console.log(rule);
   for (const left_edge of graph.graph.edges(nodes[0])) {
     if (left_edge !== active_pair) {
       const outgoing_attrs = graph.graph.getEdgeAttributes(left_edge);
-      external_nodes.set(
-        `${rule.inputs[0].clss}$${rule.inputs[0].name}.${outgoing_attrs.left_port}`,
-        left_edge.split(".")[0],
-      );
+      if (
+        left_edge.split("<>")[0].split("___")[1] ===
+        `${rule.inputs[0].clss}$${rule.inputs[0].name}.${rule.inputs[0].port}`
+      ) {
+        external_nodes.set(
+          `${rule.inputs[0].clss}$${rule.inputs[0].name}.${outgoing_attrs.left_port}`,
+          left_edge.split("<>")[1].split(".")[0],
+        );
+      } else {
+        external_nodes.set(
+          `${rule.inputs[0].clss}$${rule.inputs[0].name}.${outgoing_attrs.left_port}`,
+          left_edge.split(".")[0],
+        );
+      }
     }
   }
   for (const right_edge of graph.graph.edges(nodes[1])) {
@@ -152,7 +182,6 @@ function apply_rewrite(
   }
   graph.graph.dropNode(nodes[0]);
   graph.graph.dropNode(nodes[1]);
-  console.log(external_nodes);
   const vars = new Set(rule.outputs.map((el) => `${el.clss}$${el.name}`));
   const glmap = new Map(
     Array.from(vars, (el) => [
@@ -161,16 +190,27 @@ function apply_rewrite(
     ]),
   );
   vars.forEach((el) => {
-    // if (!rule.inputs.map((rule) => `${rule.clss}$${rule.name}`).includes(el)) {
-    graph.graph.addNode(glmap.get(el), {
-      clss: el.split("$")[0],
-      name: el.split("$")[1],
-    });
-    // }
+    if (!rule.inputs.map((rule) => `${rule.clss}$${rule.name}`).includes(el)) {
+      graph.graph.addNode(glmap.get(el), {
+        clss: el.split("$")[0],
+        name: el.split("$")[1],
+      });
+    }
   });
 
+  const spider_ntp = new Map(
+    Array.from(spider_defs, (el) => [
+      el.name,
+      new Map(
+        Array.from(el.ports, (port) => [port.slice(1), port.slice(0, 1)]),
+      ),
+    ]),
+  );
   let prev_id = null;
   let prev_port = null;
+  let prev_class = null;
+  let prev_name = null;
+  console.log(external_nodes);
   for (let [i, { clss, name, port }] of rule.outputs.entries()) {
     const local = `${clss}$${name}`;
     const id = glmap.get(local); // Get the global id of the local node
@@ -182,11 +222,16 @@ function apply_rewrite(
         prev_id = id;
       }
       prev_port = port;
+      prev_class = clss;
+      prev_name = name;
     } else {
       // We add `addDirectedEdgeWithKey` based on the agent.
       var id_to_use = id;
+      console.log(`${local}.${port}`);
       if (external_nodes.has(`${local}.${port}`)) {
         // Introduces constraint that when connecting to external nodes, they must be the first argument TODO: fix
+        console.log("using external");
+        console.log(`${local}.${port}`);
         id_to_use = external_nodes.get(`${local}.${port}`);
       }
 
@@ -201,11 +246,25 @@ function apply_rewrite(
           right_port: prev_port,
         },
       );
+      if (
+        spider_ntp.get(prev_class)?.get(prev_port) === ">" &&
+        spider_ntp.get(clss)?.get(port) === ">"
+      ) {
+        graph.book.push([
+          { node: glmap.get(`${prev_class}$${prev_name}`), port: prev_port },
+          { node: glmap.get(local), port: port },
+        ]);
+      }
     }
   }
 }
 
-function reduce(graph: Constructors.graph, rules: Constructors.rules) {
+function reduce(
+  graph: Constructors.graph,
+  rules: Constructors.rules,
+  spider_defs,
+) {
+  const snapshots = [snapshot(graph.graph)];
   const PopFromBook = () => {
     const idx = Math.floor(Math.random() * graph.book.length);
     const edge = graph.book.pop(idx);
@@ -215,10 +274,12 @@ function reduce(graph: Constructors.graph, rules: Constructors.rules) {
   while (graph.book.length > 0) {
     const target_redex: { node: string; port: string }[] = PopFromBook();
     var edge_id = `${target_redex[0].node}.${target_redex[0].port}<>${target_redex[1].node}.${target_redex[1].port}`;
+    var flip = false;
     if (!graph.graph.hasEdge(edge_id)) {
       const other_possible_edge_id = `${target_redex[1].node}.${target_redex[1].port}<>${target_redex[0].node}.${target_redex[0].port}`;
       if (graph.graph.hasEdge(other_possible_edge_id)) {
         edge_id = other_possible_edge_id;
+        flip = true;
       } else {
         throw new Error(
           "Unexpected error: Redex being looked up does not exist!",
@@ -230,17 +291,30 @@ function reduce(graph: Constructors.graph, rules: Constructors.rules) {
     const right_id = edge_attributes.right_id;
     const left_node_attributes = graph.graph.getNodeAttributes(left_id);
     const right_node_attributes = graph.graph.getNodeAttributes(right_id);
-    console.log(target_redex);
     const rule_to_apply = rules.find((el) => {
       return (
-        left_node_attributes.clss === el.inputs[1].clss && // Don't ask me why these need to be flipped
-        edge_attributes.left_port === el.inputs[1].port &&
-        right_node_attributes.clss === el.inputs[0].clss &&
-        edge_attributes.right_port === el.inputs[0].port
+        left_node_attributes.clss === el.inputs[flip ? 0 : 1].clss && // Don't ask me why these need to be flipped
+        edge_attributes.left_port === el.inputs[flip ? 0 : 1].port &&
+        right_node_attributes.clss === el.inputs[flip ? 1 : 0].clss &&
+        edge_attributes.right_port === el.inputs[flip ? 1 : 0].port
       );
     });
-    apply_rewrite(graph, rule_to_apply, [left_id, right_id], edge_id);
+    console.log(rule_to_apply);
+    if (rule_to_apply === undefined) {
+      continue;
+    }
+    console.log(rule_to_apply);
+    apply_rewrite(
+      graph,
+      rule_to_apply,
+      [left_id, right_id],
+      edge_id,
+      spider_defs,
+    );
+    snapshots.push(snapshot(graph.graph));
   }
+
+  return snapshots;
 }
 
 // Realized that the API of the nesting actually matched quite well to how `new Map(xss)` works
@@ -249,5 +323,12 @@ const spiders = prog.get("spiders").map((e) => new Constructors.spiders(...e));
 const rules = prog.get("rules").map((e) => new Constructors.rules(...e));
 const graph = new Constructors.graph(prog.get("graph"), spiders);
 console.log(graph);
-reduce(graph, rules);
+const snapshots = reduce(graph, rules, spiders);
 console.log(graph);
+
+const template = Deno.readTextFileSync("template.html");
+Deno.writeTextFileSync(
+  "output.html",
+  template.replace("__GRAPH_DATA__", JSON.stringify(snapshots)),
+);
+console.log("Wrote output.html");

@@ -9,7 +9,7 @@
               >r)))
   (rules (
           ((Z.r A.r)
-           (A.r Z.conn))))
+           (A$0.r Z.conn))))
   (graph
     (
      Z$0.r A$0.r

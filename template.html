@@ -1,0 +1,116 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      body {
+        margin: 0;
+        background: #0d0f14;
+        font-family: monospace;
+      }
+      #sigma {
+        width: 100vw;
+        height: 100vh;
+      }
+      #controls {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: #13161e;
+        border: 1px solid #1e2330;
+        padding: 10px 16px;
+        border-radius: 6px;
+        color: #c8d0e0;
+        font-size: 12px;
+      }
+      button {
+        background: #1e2330;
+        color: #c8d0e0;
+        border: 1px solid #2a3040;
+        padding: 4px 12px;
+        cursor: pointer;
+        font-family: monospace;
+        font-size: 12px;
+        border-radius: 3px;
+      }
+      button:hover {
+        background: #2a3040;
+      }
+      button:disabled {
+        opacity: 0.3;
+        cursor: default;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="sigma"></div>
+    <div id="controls">
+      <button id="prev">← prev</button>
+      <span id="step-label">step 0 / 0</span>
+      <button id="next">next →</button>
+    </div>
+    <script type="module">
+      import Graph from "https://esm.sh/graphology@0.25.4";
+      import Sigma from "https://esm.sh/sigma@3.0.0-beta.25";
+      import { circular } from "https://esm.sh/graphology-layout@0.6.1";
+      import forceAtlas2 from "https://esm.sh/graphology-layout-forceatlas2@0.10.1";
+
+      const COLORS = { Z: "#4af0c4", S: "#f0a44a", P: "#a44af0", T: "#f04a6a" }; // Totally need to do this better. Probably even interping it in
+      const snapshots = __GRAPH_DATA__;
+
+      let step = 0;
+      let renderer = null;
+
+      function buildGraph(data) {
+        const graph = new Graph({ type: "undirected", multi: true });
+        for (const node of data.nodes) {
+          graph.addNode(node.id, {
+            label: `${node.clss}$${node.name}`,
+            color: COLORS[node.clss] ?? "#888",
+            size: 14,
+            x: Math.random(),
+            y: Math.random(),
+          });
+        }
+        for (const edge of data.edges) {
+          graph.addEdgeWithKey(edge.id, edge.source, edge.target, {
+            size: 2,
+            color: "#2a3040",
+            label: `${edge.right_port} ↔ ${edge.left_port}`,
+          });
+        }
+        circular.assign(graph, { scale: 150 });
+        forceAtlas2.assign(graph, {
+          iterations: 300,
+          settings: forceAtlas2.inferSettings(graph),
+        });
+        return graph;
+      }
+
+      function render(s) {
+        if (renderer) renderer.kill();
+        const graph = buildGraph(snapshots[s]);
+        renderer = new Sigma(graph, document.getElementById("sigma"), {
+          labelFont: "monospace",
+          labelColor: { color: "#c8d0e0" },
+          renderEdgeLabels: true,
+          edgeLabelFont: "monospace",
+          edgeLabelColor: { color: "#5a6070" },
+        });
+        document.getElementById("step-label").textContent =
+          `step ${s} / ${snapshots.length - 1}`;
+        document.getElementById("prev").disabled = s === 0;
+        document.getElementById("next").disabled = s === snapshots.length - 1;
+      }
+
+      document.getElementById("prev").onclick = () => render(--step);
+      document.getElementById("next").onclick = () => render(++step);
+
+      render(0);
+    </script>
+  </body>
+</html>
