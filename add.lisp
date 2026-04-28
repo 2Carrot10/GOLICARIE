@@ -32,10 +32,10 @@
             (S.r P$0.arg1)
             (
               ; We aren't actually "moving things around". The nodes in the active pair are deleted, but we have a reference to their edges.
-              P$0.r S.r
-              S.n P$1.r
-              P$1.arg1 S.n
-              P$0.arg2 P$1.arg2))))
+              P$new.r S$new.r
+              S$new.n P$1.r
+              P$1.arg1 S$new.n
+              P$new.arg2 P$1.arg2))))
   (graph
     ; Starting off simple. Adding 1 and 2 together. 
     (

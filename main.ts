@@ -151,23 +151,38 @@ function apply_rewrite(
   spider_defs: spiders[],
 ) {
   var external_nodes = new Map();
-  console.log(rule);
   for (const left_edge of graph.graph.edges(nodes[0])) {
     if (left_edge !== active_pair) {
       const outgoing_attrs = graph.graph.getEdgeAttributes(left_edge);
-      external_nodes.set(
-        `${rule.inputs[1].clss}$${rule.inputs[0].name}.${outgoing_attrs.right_port}`,
-        graph.graph.opposite(nodes[0], left_edge),
-      );
+      const outgoing_origin = graph.graph.target(left_edge);
+      if (outgoing_origin !== nodes[0]) {
+        external_nodes.set(
+          `${rule.inputs[1].clss}$${rule.inputs[0].name}.${outgoing_attrs.right_port}`,
+          graph.graph.opposite(nodes[0], left_edge),
+        );
+      } else {
+        external_nodes.set(
+          `${rule.inputs[1].clss}$${rule.inputs[0].name}.${outgoing_attrs.left_port}`,
+          graph.graph.opposite(nodes[0], left_edge),
+        );
+      }
     }
   }
   for (const right_edge of graph.graph.edges(nodes[1])) {
     if (right_edge !== active_pair) {
       const outgoing_attrs = graph.graph.getEdgeAttributes(right_edge);
-      external_nodes.set(
-        `${rule.inputs[0].clss}$${rule.inputs[1].name}.${outgoing_attrs.right_port}`,
-        graph.graph.opposite(nodes[1], right_edge),
-      );
+      const outgoing_origin = graph.graph.target(right_edge);
+      if (outgoing_origin !== nodes[1]) {
+        external_nodes.set(
+          `${rule.inputs[0].clss}$${rule.inputs[1].name}.${outgoing_attrs.right_port}`,
+          graph.graph.opposite(nodes[1], right_edge),
+        );
+      } else {
+        external_nodes.set(
+          `${rule.inputs[0].clss}$${rule.inputs[1].name}.${outgoing_attrs.left_port}`,
+          graph.graph.opposite(nodes[1], right_edge),
+        );
+      }
     }
   }
   graph.graph.dropNode(nodes[0]);
@@ -200,7 +215,6 @@ function apply_rewrite(
   let prev_port = null;
   let prev_class = null;
   let prev_name = null;
-  console.log(external_nodes);
   for (let [i, { clss, name, port }] of rule.outputs.entries()) {
     const local = `${clss}$${name}`;
     const id = glmap.get(local); // Get the global id of the local node
@@ -217,11 +231,8 @@ function apply_rewrite(
     } else {
       // We add `addDirectedEdgeWithKey` based on the agent.
       var id_to_use = id;
-      console.log(`${local}.${port}`);
       if (external_nodes.has(`${local}.${port}`)) {
         // Introduces constraint that when connecting to external nodes, they must be the first argument TODO: fix
-        console.log("using external");
-        console.log(`${local}.${port}`);
         id_to_use = external_nodes.get(`${local}.${port}`);
       }
 
@@ -289,11 +300,9 @@ function reduce(
         edge_attributes.right_port === el.inputs[flip ? 0 : 0].port
       );
     });
-    console.log(rule_to_apply);
     if (rule_to_apply === undefined) {
       continue;
     }
-    console.log(rule_to_apply);
     apply_rewrite(
       graph,
       rule_to_apply,
