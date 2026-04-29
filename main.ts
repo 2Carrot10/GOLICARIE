@@ -157,12 +157,12 @@ function apply_rewrite(
       const outgoing_origin = graph.graph.target(left_edge);
       if (outgoing_origin !== nodes[0]) {
         external_nodes.set(
-          `${rule.inputs[1].clss}$${rule.inputs[0].name}.${outgoing_attrs.right_port}`,
+          `${rule.inputs[0].clss}$${rule.inputs[0].name}.${outgoing_attrs.right_port}`,
           graph.graph.opposite(nodes[0], left_edge),
         );
       } else {
         external_nodes.set(
-          `${rule.inputs[1].clss}$${rule.inputs[0].name}.${outgoing_attrs.left_port}`,
+          `${rule.inputs[0].clss}$${rule.inputs[0].name}.${outgoing_attrs.left_port}`,
           graph.graph.opposite(nodes[0], left_edge),
         );
       }
@@ -174,12 +174,12 @@ function apply_rewrite(
       const outgoing_origin = graph.graph.target(right_edge);
       if (outgoing_origin !== nodes[1]) {
         external_nodes.set(
-          `${rule.inputs[0].clss}$${rule.inputs[1].name}.${outgoing_attrs.right_port}`,
+          `${rule.inputs[1].clss}$${rule.inputs[1].name}.${outgoing_attrs.right_port}`,
           graph.graph.opposite(nodes[1], right_edge),
         );
       } else {
         external_nodes.set(
-          `${rule.inputs[0].clss}$${rule.inputs[1].name}.${outgoing_attrs.left_port}`,
+          `${rule.inputs[1].clss}$${rule.inputs[1].name}.${outgoing_attrs.left_port}`,
           graph.graph.opposite(nodes[1], right_edge),
         );
       }
@@ -274,32 +274,33 @@ function reduce(
 
   while (graph.book.length > 0) {
     const target_redex: { node: string; port: string }[] = PopFromBook();
-    var edge_id = `${target_redex[0].node}.${target_redex[0].port}<>${target_redex[1].node}.${target_redex[1].port}`;
-    var flip = false;
-    if (!graph.graph.hasEdge(edge_id)) {
-      const other_possible_edge_id = `${target_redex[1].node}.${target_redex[1].port}<>${target_redex[0].node}.${target_redex[0].port}`;
-      if (graph.graph.hasEdge(other_possible_edge_id)) {
-        edge_id = other_possible_edge_id;
-        flip = true;
-      } else {
-        throw new Error(
-          "Unexpected error: Redex being looked up does not exist!",
+    const edge_id = graph.graph
+      .edges(target_redex[0].node, target_redex[1].node)
+      .find((edge) => {
+        const attrs = graph.graph.getEdgeAttributes(edge);
+        return (
+          (attrs.left_port === target_redex[0].port &&
+            attrs.right_port === target_redex[1].port) ||
+          (attrs.right_port === target_redex[0].port &&
+            attrs.left_port === target_redex[1].port)
         );
-      }
-    }
+      });
+    const flip = graph.graph.source(edge_id) === target_redex[0].node;
+
     const edge_attributes = graph.graph.getEdgeAttributes(edge_id);
-    const left_id = edge_attributes.left_id;
-    const right_id = edge_attributes.right_id;
+    const left_id = edge_attributes.right_id; // NOTE: DEPENDING ON IF YOU SWAP THIS OR NOT, IT WORKS FOR SOME DEMOS AND NOT FOR OTHERS. In the future we should make this switch automated
+    const right_id = edge_attributes.left_id;
     const left_node_attributes = graph.graph.getNodeAttributes(left_id);
     const right_node_attributes = graph.graph.getNodeAttributes(right_id);
     const rule_to_apply = rules.find((el) => {
       return (
-        left_node_attributes.clss === el.inputs[flip ? 1 : 1].clss && // Don't ask me why these need to be flipped
-        edge_attributes.left_port === el.inputs[flip ? 1 : 1].port &&
-        right_node_attributes.clss === el.inputs[flip ? 0 : 0].clss &&
-        edge_attributes.right_port === el.inputs[flip ? 0 : 0].port
+        left_node_attributes.clss === el.inputs[flip ? 0 : 1].clss && // Don't ask me why these need to be flipped
+        // edge_attributes.left_port === el.inputs[flip ? 0 : 1].port &&
+        right_node_attributes.clss === el.inputs[flip ? 1 : 0].clss // &&
+        // edge_attributes.right_port === el.inputs[flip ? 1 : 0].port
       );
     });
+    console.log(rule_to_apply, flip);
     if (rule_to_apply === undefined) {
       continue;
     }
