@@ -151,18 +151,26 @@ function apply_rewrite(
   spider_defs: spiders[],
 ) {
   var external_nodes = new Map();
+  const redex_origin = nodes[0]; //graph.graph.target(active_pair);
+  const rule_swapped =
+    `${rule.inputs[0].clss}` === redex_origin.split("___")[1].split("$")[0];
+  console.log(
+    "Rule swap calcultaion",
+    `${rule.inputs[0].clss}`,
+    redex_origin.split("___")[1].split("$")[0],
+  );
   for (const left_edge of graph.graph.edges(nodes[0])) {
     if (left_edge !== active_pair) {
       const outgoing_attrs = graph.graph.getEdgeAttributes(left_edge);
       const outgoing_origin = graph.graph.target(left_edge);
       if (outgoing_origin !== nodes[0]) {
         external_nodes.set(
-          `${rule.inputs[0].clss}$${rule.inputs[0].name}.${outgoing_attrs.right_port}`,
+          `${rule.inputs[rule_swapped ? 0 : 1].clss}$${rule.inputs[rule_swapped ? 0 : 1].name}.${outgoing_attrs.right_port}`,
           graph.graph.opposite(nodes[0], left_edge),
         );
       } else {
         external_nodes.set(
-          `${rule.inputs[0].clss}$${rule.inputs[0].name}.${outgoing_attrs.left_port}`,
+          `${rule.inputs[rule_swapped ? 0 : 1].clss}$${rule.inputs[rule_swapped ? 0 : 1].name}.${outgoing_attrs.left_port}`,
           graph.graph.opposite(nodes[0], left_edge),
         );
       }
@@ -174,17 +182,18 @@ function apply_rewrite(
       const outgoing_origin = graph.graph.target(right_edge);
       if (outgoing_origin !== nodes[1]) {
         external_nodes.set(
-          `${rule.inputs[1].clss}$${rule.inputs[1].name}.${outgoing_attrs.right_port}`,
+          `${rule.inputs[rule_swapped ? 1 : 0].clss}$${rule.inputs[rule_swapped ? 1 : 0].name}.${outgoing_attrs.right_port}`,
           graph.graph.opposite(nodes[1], right_edge),
         );
       } else {
         external_nodes.set(
-          `${rule.inputs[1].clss}$${rule.inputs[1].name}.${outgoing_attrs.left_port}`,
+          `${rule.inputs[rule_swapped ? 1 : 0].clss}$${rule.inputs[rule_swapped ? 1 : 0].name}.${outgoing_attrs.left_port}`,
           graph.graph.opposite(nodes[1], right_edge),
         );
       }
     }
   }
+  console.log(external_nodes);
   graph.graph.dropNode(nodes[0]);
   graph.graph.dropNode(nodes[1]);
   const vars = new Set(rule.outputs.map((el) => `${el.clss}$${el.name}`));
@@ -231,6 +240,7 @@ function apply_rewrite(
     } else {
       // We add `addDirectedEdgeWithKey` based on the agent.
       var id_to_use = id;
+      console.log(`Using binding ${local}.${port}`);
       if (external_nodes.has(`${local}.${port}`)) {
         // Introduces constraint that when connecting to external nodes, they must be the first argument TODO: fix
         id_to_use = external_nodes.get(`${local}.${port}`);
@@ -285,22 +295,40 @@ function reduce(
             attrs.left_port === target_redex[1].port)
         );
       });
-    const flip = graph.graph.source(edge_id) === target_redex[0].node;
+    // const flip = graph.graph.source(edge_id) === target_redex[0].node;
 
     const edge_attributes = graph.graph.getEdgeAttributes(edge_id);
-    const left_id = edge_attributes.right_id; // NOTE: DEPENDING ON IF YOU SWAP THIS OR NOT, IT WORKS FOR SOME DEMOS AND NOT FOR OTHERS. In the future we should make this switch automated
-    const right_id = edge_attributes.left_id;
+    const flip_node_ids = edge_attributes.left_id === target_redex[0].node;
+    const left_id = flip_node_ids
+      ? edge_attributes.right_id
+      : edge_attributes.left_id;
+    const right_id = flip_node_ids
+      ? edge_attributes.left_id
+      : edge_attributes.right_id;
     const left_node_attributes = graph.graph.getNodeAttributes(left_id);
     const right_node_attributes = graph.graph.getNodeAttributes(right_id);
     const rule_to_apply = rules.find((el) => {
+      const flip =
+        target_redex[0].node.split("___")[1].split("$")[0] ===
+        el.inputs[0].clss;
+      // console.log(
+      //   "Flip calculation",
+      //   target_redex[0].node.split("___")[1].split("$")[0],
+      //   el.inputs[0].clss,
+      // );
+      // console.log(
+      //   left_node_attributes.clss,
+      //   el.inputs[flip ? 1 : 0].clss,
+      //   flip,
+      // );
       return (
-        left_node_attributes.clss === el.inputs[flip ? 0 : 1].clss && // Don't ask me why these need to be flipped
+        left_node_attributes.clss === el.inputs[flip ? 1 : 0].clss && // Don't ask me why these need to be flipped
         // edge_attributes.left_port === el.inputs[flip ? 0 : 1].port &&
-        right_node_attributes.clss === el.inputs[flip ? 1 : 0].clss // &&
+        right_node_attributes.clss === el.inputs[flip ? 0 : 1].clss // &&
         // edge_attributes.right_port === el.inputs[flip ? 1 : 0].port
       );
     });
-    console.log(rule_to_apply, flip);
+    console.log(rule_to_apply);
     if (rule_to_apply === undefined) {
       continue;
     }
