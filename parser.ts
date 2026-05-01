@@ -60,31 +60,66 @@ export class Parser {
 		}
 	}
 
-	parse(): SExpr {
-		let sexpr = this.get_sexpr()
+	peek_token(): string | null {
+		let saved_i = this.i
+		let next
+		try {
+			next = this.next_token()
+		} catch {
+			return null
+		}
+		this.i = saved_i
+		return next
+	}
+
+	expect_token(expectation: string): string {
+		let next = this.next_token()
+		if (next != expectation) {
+			throw new Error(`Expected '${expectation}' at start of s expression. found '${next}'`)
+		}
+		return next
+	}
+
+	consume_token_if_equals(expectation: string): boolean {
+		let next = this.peek_token()
+		if (next == expectation) {
+			this.next_token()
+			return true
+		} else {
+			return false
+		}
+	}
+
+	parse(): SExpr[] {
+		let sexpr: SExpr[] = []
+		// let sexpr = this.get_sexpr()
 		// We want the final token request to fail
-		try { this.next_token() } catch (error) {
+		try { this.peek_token() } catch (error) {
 			return sexpr
 		}
-		throw new Error(`Text found at the end of final ')': '${this.text.slice(this.i - 10, this.i + 100)}'`)
 
+		while(this.peek_token()) {
+			sexpr.push(this.get_sexpr())
+		}
+		return sexpr
+		//  throw new Error(`Text found at the end of final ')': '${this.text.slice(this.i - 10, this.i + 100)}'`)
 	}
 
 	get_sexpr(): SExpr {
-		let first_token = this.next_token()
-		if (first_token != "(") {
-			throw new Error(`Expected '(' at start of s expression. found '${first_token}'`)
-		}
+		console.log("Next token", this.peek_token())
+		this.expect_token("(")
 		let contains: SExpr[] = []
-		let token: string
-		while ((token = this.next_token()) != ")") {
-			if (token == "(") {
-				this.i--; // HACK!
+		while (!this.consume_token_if_equals(")")) {
+			if (this.peek_token() == "(") {
 				contains.push(this.get_sexpr())
 			} else {
-				contains.push(token)
+				contains.push(this.next_token())
 			}
 		}
 		return contains
+	}
+
+	take(): [string, SExpr] {
+		return [this[0], this.slice(1)]
 	}
 }
